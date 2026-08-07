@@ -55,7 +55,7 @@ LinkedIn collector / XING collector
  dashboard reads jobs and runs
 ```
 
-Use the existing NestJS application as a single process:
+Use one NestJS application process:
 
 - A source-specific collector returns normalized source listings.
 - A scheduled task starts enabled saved searches one at a time.
@@ -74,8 +74,9 @@ keyword
 location
 filters_json
 enabled
-schedule
+schedule_minutes
 last_completed_at
+last_attempted_at
 created_at
 updated_at
 ```
@@ -86,7 +87,8 @@ updated_at
 id
 saved_search_id
 source
-status                  running | succeeded | failed
+status                  running | succeeded | partial | failed
+coverage_complete
 started_at
 finished_at
 found_count
@@ -118,7 +120,17 @@ created_at
 updated_at
 ```
 
-Enforce a unique constraint on `(source, source_job_id)`. Store only fields needed to view a job and link to its source or application. Do not persist session data, cookies, browser traces, or raw responses.
+### `job_searches`
+
+```text
+saved_search_id
+job_id
+is_available
+first_seen_at
+last_seen_at
+```
+
+Enforce a unique constraint on `(source, source_job_id)`. `job_searches` is needed because a listing can be returned by multiple saved searches; it prevents one incomplete match from making a job unavailable globally. Store only fields needed to view a job and link to its source or application. Do not persist session data, cookies, browser traces, or raw responses.
 
 ## Collection and update rules
 
@@ -127,7 +139,7 @@ Enforce a unique constraint on `(source, source_job_id)`. Store only fields need
 - Upsert by `(source, source_job_id)`.
 - On every observation, update the job fields, `data_hash`, `last_seen_at`, and set `status` to `active`.
 - A changed `data_hash` means the source data has changed; overwrite the current job values. The MVP does not retain field-level history.
-- Mark jobs from the completed saved search as `unavailable` only when pagination completed successfully. Do not change statuses after failed or partial runs.
+- Mark a missing search-to-job link unavailable only when pagination completed successfully; mark the job `unavailable` only when no active saved search still observes it. Do not change statuses after failed or partial runs.
 - Mark a job `closed` only when the source explicitly reports closure, the listing has an expiry date in the past, or a checked listing page confirms it is closed.
 - Collectors stop and report a failed run on access-control, policy, or CAPTCHA responses.
 

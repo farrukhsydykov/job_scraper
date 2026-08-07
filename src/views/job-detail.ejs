@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">Job collector</a>
+      <nav><a href="/dashboard/searches">Searches &amp; runs</a></nav>
+    </header>
+    <main class="detail-page">
+      <a class="back-link" href="/">← All jobs</a>
+      <section class="detail-header">
+        <p class="source"><%= job.source %></p>
+        <h1><%= job.title %></h1>
+        <p class="lead"><%= job.companyName ?? 'Unknown company' %><%= job.location ? ` · ${job.location}` : '' %></p>
+        <div class="tag-row">
+          <span class="status status-<%= job.status %>"><%= job.status %></span>
+          <span class="tag"><%= job.workplaceType %></span>
+          <span class="tag"><%= job.employmentType %></span>
+        </div>
+      </section>
+
+      <section class="detail-grid">
+        <article>
+          <h2>Description</h2>
+          <% if (job.description) { %>
+            <p class="description"><%= job.description %></p>
+          <% } else { %>
+            <p class="muted">No description was provided by the source.</p>
+          <% } %>
+        </article>
+        <aside class="metadata">
+          <h2>Listing details</h2>
+          <dl>
+            <div><dt>Published</dt><dd><%= formatDate(job.publishedAt) %></dd></div>
+            <div><dt>Expires</dt><dd><%= formatDate(job.expiresAt) %></dd></div>
+            <div><dt>First seen</dt><dd><%= formatDate(job.firstSeenAt) %></dd></div>
+            <div><dt>Last seen</dt><dd><%= formatDate(job.lastSeenAt) %></dd></div>
+          </dl>
+          <div class="stacked-actions">
+            <a class="button" href="<%= job.applyUrl ?? job.sourceUrl %>" target="_blank" rel="noreferrer">Open application</a>
+            <a class="button-secondary" href="<%= job.sourceUrl %>" target="_blank" rel="noreferrer">Open source</a>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

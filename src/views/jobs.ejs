@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">Job collector</a>
+      <nav><a href="/dashboard/searches">Searches &amp; runs</a></nav>
+    </header>
+    <main>
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">MVP dashboard</p>
+          <h1>Collected jobs</h1>
+        </div>
+        <span class="count"><%= page.jobs.length %> shown</span>
+      </section>
+
+      <form class="filters" method="get" action="/">
+        <label>
+          Search
+          <input name="q" value="<%= query.q ?? '' %>" placeholder="Title, company, description" />
+        </label>
+        <label>
+          Location
+          <input name="location" value="<%= query.location ?? '' %>" />
+        </label>
+        <label>
+          Source
+          <select name="source">
+            <option value="">All sources</option>
+            <% sources.forEach((source) => { %>
+              <option value="<%= source %>" <%= query.source === source ? 'selected' : '' %>><%= source %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>
+          Status
+          <select name="status">
+            <option value="">All statuses</option>
+            <% statuses.forEach((status) => { %>
+              <option value="<%= status %>" <%= query.status === status ? 'selected' : '' %>><%= status %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>
+          Workplace
+          <select name="workplaceType">
+            <option value="">Any</option>
+            <% workplaceTypes.forEach((workplaceType) => { %>
+              <option value="<%= workplaceType %>" <%= query.workplaceType === workplaceType ? 'selected' : '' %>><%= workplaceType %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>
+          Employment
+          <select name="employmentType">
+            <option value="">Any</option>
+            <% employmentTypes.forEach((employmentType) => { %>
+              <option value="<%= employmentType %>" <%= query.employmentType === employmentType ? 'selected' : '' %>><%= employmentType %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>
+          Posted since
+          <input type="date" name="publishedAfter" value="<%= query.publishedAfter?.slice(0, 10) ?? '' %>" />
+        </label>
+        <div class="filter-actions">
+          <button type="submit">Filter</button>
+          <a class="button-secondary" href="/">Clear</a>
+        </div>
+      </form>
+
+      <% if (!page.jobs.length) { %>
+        <section class="empty-state">
+          <h2>No jobs match these filters</h2>
+          <p>Add and run a saved search to collect jobs.</p>
+          <a class="button" href="/dashboard/searches">Manage searches</a>
+        </section>
+      <% } else { %>
+        <section class="job-list">
+          <% page.jobs.forEach((job) => { %>
+            <article class="job-card">
+              <div class="job-card-main">
+                <p class="source"><%= job.source %></p>
+                <h2><a href="/dashboard/jobs/<%= job.id %>"><%= job.title %></a></h2>
+                <p><%= job.companyName ?? 'Unknown company' %><%= job.location ? ` · ${job.location}` : '' %></p>
+                <p class="muted"><%= job.workplaceType %> · <%= job.employmentType %> · Seen <%= formatDate(job.lastSeenAt) %></p>
+              </div>
+              <span class="status status-<%= job.status %>"><%= job.status %></span>
+            </article>
+          <% }) %>
+        </section>
+      <% } %>
+
+      <% if (nextPageUrl) { %>
+        <div class="pagination"><a class="button-secondary" href="<%= nextPageUrl %>">Next page</a></div>
+      <% } %>
+    </main>
+  </body>
+</html>

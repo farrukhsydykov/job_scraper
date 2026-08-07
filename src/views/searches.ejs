@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">Job collector</a>
+      <nav><a href="/">Collected jobs</a></nav>
+    </header>
+    <main>
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">Collection controls</p>
+          <h1>Searches and runs</h1>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Add saved search</h2>
+        <form class="search-form" method="post" action="/dashboard/searches">
+          <label>
+            Source
+            <select name="source" required>
+              <% sources.forEach((source) => { %>
+                <option value="<%= source %>"><%= source %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>
+            Keyword
+            <input name="keyword" required placeholder="e.g. backend engineer" />
+          </label>
+          <label>
+            Location
+            <input name="location" placeholder="e.g. Berlin" />
+          </label>
+          <label>
+            Run every (minutes)
+            <input name="scheduleMinutes" type="number" min="15" max="1440" value="360" required />
+          </label>
+          <button type="submit">Save search</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Saved searches</h2>
+          <span class="count"><%= searches.length %></span>
+        </div>
+        <% if (!searches.length) { %>
+          <p class="muted">No saved searches yet.</p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Query</th>
+                  <th>Schedule</th>
+                  <th>Last attempt</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% searches.forEach((search) => { %>
+                  <tr>
+                    <td><span class="source"><%= search.source %></span></td>
+                    <td><strong><%= search.keyword %></strong><%= search.location ? ` · ${search.location}` : '' %></td>
+                    <td><%= search.scheduleMinutes %> min</td>
+                    <td><%= formatDate(search.lastAttemptedAt) %></td>
+                    <td class="actions">
+                      <form method="post" action="/dashboard/searches/<%= search.id %>/runs">
+                        <button type="submit" <%= search.enabled ? '' : 'disabled' %>>Run now</button>
+                      </form>
+                      <form method="post" action="/dashboard/searches/<%= search.id %>/toggle">
+                        <button class="button-secondary" type="submit"><%= search.enabled ? 'Disable' : 'Enable' %></button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Recent runs</h2>
+          <span class="count"><%= runs.length %></span>
+        </div>
+        <% if (!runs.length) { %>
+          <p class="muted">Runs will appear here after a saved search is started.</p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Started</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th>Jobs</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% runs.forEach((run) => { %>
+                  <tr>
+                    <td><%= formatDate(run.startedAt) %></td>
+                    <td><%= run.source %></td>
+                    <td><span class="status status-<%= run.status %>"><%= run.status %></span></td>
+                    <td><%= run.upsertedCount %> / <%= run.foundCount %></td>
+                    <td class="run-message"><%= run.errorMessage ?? 'Complete coverage confirmed' %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>
