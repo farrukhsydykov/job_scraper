@@ -262,7 +262,7 @@ export class SourceCollectorsService {
     linkedInCollector: LinkedInJobCollector,
     xingCollector: XingJobCollector,
   ) {
-    this.collectors = new Map([
+    this.collectors = new Map<JobSource, JobCollector>([
       [linkedInCollector.source, linkedInCollector],
       [xingCollector.source, xingCollector],
     ]);

@@ -4,7 +4,7 @@
   "description": "MVP job collection dashboard",
   "main": "index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp -r src/views dist/views && cp -r public dist/public",
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/views dist/public && cp -r src/views/. dist/views && cp -r public/. dist/public",
     "start": "NODE_ENV=production node dist/main",
     "start:dev": "NODE_ENV=development tsx watch src/main.ts",
     "test": "vitest run",
