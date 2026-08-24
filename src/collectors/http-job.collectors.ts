@@ -1,5 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  getCollectionEnv,
+  getCollectionMode,
+  isSourceCollectionEnabled,
+} from '../config/collection-env';
 import { JobSource, SavedSearch } from '../database/entities';
 import {
   CollectionBlockedError,
@@ -35,10 +42,22 @@ abstract class HttpJobCollector implements JobCollector {
     const jobsById = new Map<string, CollectedJob>();
     const maxPages = this.getMaxPages();
     let coverageComplete = false;
+    let isFirstRequest = true;
+
+    /**
+     * Fetches one page and applies the configured delay after the first request.
+     */
+    const fetchPage = async (url: string): Promise<string> => {
+      if (!isFirstRequest) {
+        await this.waitBetweenRequests();
+      }
+      isFirstRequest = false;
+      return this.fetchHtml(url);
+    };
 
     for (let page = 0; page < maxPages; page += 1) {
       const searchUrl = this.buildSearchUrl(search, page);
-      const searchHtml = await this.fetchHtml(searchUrl);
+      const searchHtml = await fetchPage(searchUrl);
       const embeddedJobs = extractJsonLdJobs(
         searchHtml,
         this.source,
@@ -51,7 +70,7 @@ abstract class HttpJobCollector implements JobCollector {
 
       const detailUrls = extractDetailUrls(searchHtml, this.source, searchUrl);
       for (const detailUrl of detailUrls) {
-        const detailHtml = await this.fetchHtml(detailUrl);
+        const detailHtml = await fetchPage(detailUrl);
         const detailJobs = extractJsonLdJobs(
           detailHtml,
           this.source,
@@ -72,10 +91,6 @@ abstract class HttpJobCollector implements JobCollector {
         coverageComplete = true;
         break;
       }
-
-      if (page < maxPages - 1) {
-        await this.waitBetweenRequests();
-      }
     }
 
     return { jobs: [...jobsById.values()], coverageComplete };
@@ -95,17 +110,9 @@ abstract class HttpJobCollector implements JobCollector {
    * Checks source enablement before making any network request.
    */
   private assertCollectionEnabled(): void {
-    const globallyEnabled =
-      this.config.get<string>('COLLECTION_ENABLED', 'false') === 'true';
-    const sourceEnabled =
-      this.config.get<string>(
-        `${this.source.toUpperCase()}_COLLECTION_ENABLED`,
-        'false',
-      ) === 'true';
-
-    if (!globallyEnabled || !sourceEnabled) {
+    if (!isSourceCollectionEnabled(this.config, this.source)) {
       throw new CollectionBlockedError(
-        `${this.source} collection is disabled until an authorized source path is configured.`,
+        `${this.source} collection is disabled until COLLECTION_ENABLED and ${this.source.toUpperCase()}_COLLECTION_ENABLED are set to true in .env.`,
       );
     }
   }
@@ -115,6 +122,10 @@ abstract class HttpJobCollector implements JobCollector {
    */
   private async fetchHtml(url: string): Promise<string> {
     this.assertAllowedHost(url);
+
+    if (getCollectionMode(this.config) === 'fixture') {
+      return this.readFixture(url);
+    }
 
     const response = await fetch(url, {
       headers: {
@@ -145,6 +156,22 @@ abstract class HttpJobCollector implements JobCollector {
     }
 
     return html;
+  }
+
+  /**
+   * Reads a local HTML fixture for the current source instead of making HTTP requests.
+   */
+  private async readFixture(urlValue: string): Promise<string> {
+    const url = new URL(urlValue);
+    const isSearch = url.pathname.includes('/jobs/search');
+    const fileName = `${this.source}-${isSearch ? 'search' : 'detail'}.html`;
+    const filePath = join(process.cwd(), 'fixtures', fileName);
+
+    try {
+      return await readFile(filePath, 'utf8');
+    } catch {
+      throw new Error(`Fixture file missing: ${filePath}`);
+    }
   }
 
   /**
@@ -252,8 +279,9 @@ export class XingJobCollector extends HttpJobCollector {
 }
 
 @Injectable()
-export class SourceCollectorsService {
+export class SourceCollectorsService implements OnModuleInit {
   private readonly collectors: Map<JobSource, JobCollector>;
+  private readonly logger = new Logger(SourceCollectorsService.name);
 
   /**
    * Registers the MVP's source-specific collectors.
@@ -261,11 +289,22 @@ export class SourceCollectorsService {
   constructor(
     linkedInCollector: LinkedInJobCollector,
     xingCollector: XingJobCollector,
+    private readonly config: ConfigService,
   ) {
     this.collectors = new Map<JobSource, JobCollector>([
       [linkedInCollector.source, linkedInCollector],
       [xingCollector.source, xingCollector],
     ]);
+  }
+
+  /**
+   * Logs the collection flags loaded from .env so a test run is easy to verify.
+   */
+  onModuleInit(): void {
+    const env = getCollectionEnv(this.config);
+    this.logger.log(
+      `Collection COLLECTION_ENABLED=${env.globallyEnabled} COLLECTION_MODE=${env.mode} linkedin=${env.linkedInEnabled} xing=${env.xingEnabled}`,
+    );
   }
 
   /**

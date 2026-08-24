@@ -19,6 +19,28 @@
         </div>
       </section>
 
+      <% if (!collection.globallyEnabled) { %>
+        <p class="notice notice-warning">
+          Collection is off. Copy <code>.env.example</code> to <code>.env</code>,
+          set <code>COLLECTION_ENABLED=true</code> and a source flag, keep
+          <code>COLLECTION_MODE=fixture</code> for a local test, then restart.
+        </p>
+      <% } else if (collection.mode === 'fixture') { %>
+        <p class="notice">
+          Fixture mode is on. Runs read local HTML from <code>fixtures/</code>
+          and do not call LinkedIn or XING.
+          LinkedIn <%= collection.linkedInEnabled ? 'enabled' : 'disabled' %>;
+          XING <%= collection.xingEnabled ? 'enabled' : 'disabled' %>.
+        </p>
+      <% } else { %>
+        <p class="notice notice-warning">
+          Live collection mode.
+          LinkedIn <%= collection.linkedInEnabled ? 'enabled' : 'disabled' %>;
+          XING <%= collection.xingEnabled ? 'enabled' : 'disabled' %>.
+          Use this only for an authorized source path.
+        </p>
+      <% } %>
+
       <section class="panel">
         <h2>Add saved search</h2>
         <form class="search-form" method="post" action="/dashboard/searches">

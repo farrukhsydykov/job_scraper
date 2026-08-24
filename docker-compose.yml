@@ -1,3 +1,4 @@
+# DB_* values in .env / .env.example must match these credentials.
 services:
   postgres:
     image: postgres:17-alpine
@@ -7,6 +8,11 @@ services:
       POSTGRES_PASSWORD: job_scraper
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_scraper -d job_scraper"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

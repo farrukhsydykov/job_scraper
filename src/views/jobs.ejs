@@ -79,6 +79,9 @@
         <section class="empty-state">
           <h2>No jobs match these filters</h2>
           <p>Add and run a saved search to collect jobs.</p>
+          <% if (!collection.globallyEnabled) { %>
+            <p class="muted">Collection flags are off. Enable them in <code>.env</code>, restart, then run a saved search.</p>
+          <% } %>
           <a class="button" href="/dashboard/searches">Manage searches</a>
         </section>
       <% } else { %>

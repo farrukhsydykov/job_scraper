@@ -251,6 +251,22 @@ select {
   text-align: center;
 }
 
+.notice {
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #d7e0ee;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #40516a;
+  font-size: 0.92rem;
+}
+
+.notice-warning {
+  border-color: #f0d48a;
+  background: #fff8e8;
+  color: #835c00;
+}
+
 .panel {
   padding: 1.2rem;
 }

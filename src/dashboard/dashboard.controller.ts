@@ -9,7 +9,9 @@ import {
   Render,
   Res,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
+import { getCollectionEnv } from '../config/collection-env';
 import { CreateSavedSearchDto, JobListQueryDto } from '../contracts';
 import {
   CollectionRunStatus,
@@ -31,6 +33,7 @@ export class DashboardController {
     private readonly jobsService: JobsService,
     private readonly searchesService: SearchesService,
     private readonly runsService: RunsService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -52,6 +55,7 @@ export class DashboardController {
       statuses: Object.values(JobStatus),
       workplaceTypes: Object.values(WorkplaceType),
       employmentTypes: Object.values(EmploymentType),
+      collection: getCollectionEnv(this.config),
       formatDate,
     };
   }
@@ -83,6 +87,7 @@ export class DashboardController {
       runs: await this.runsService.list(),
       sources: Object.values(JobSource),
       statuses: Object.values(CollectionRunStatus),
+      collection: getCollectionEnv(this.config),
       formatDate,
     };
   }
