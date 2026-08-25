@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
@@ -18,16 +18,21 @@ import {
   WorkplaceType,
 } from './database/entities';
 
+const emptyStringToUndefined = ({ value }: { value: unknown }): unknown =>
+  value === '' ? undefined : value;
+
 export class CreateSavedSearchDto {
   @IsEnum(JobSource)
   source!: JobSource;
 
   @IsString()
   @IsNotEmpty()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   keyword!: string;
 
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   location?: string;
 
   @IsOptional()
@@ -35,7 +40,9 @@ export class CreateSavedSearchDto {
   filters?: Record<string, unknown>;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
   @IsBoolean()
   enabled?: boolean;
 
@@ -45,16 +52,50 @@ export class CreateSavedSearchDto {
   @Min(15)
   @Max(1440)
   scheduleMinutes?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  resultLimit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(15)
+  runWindowMinutes?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  requestDelaySeconds?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  requestJitterSeconds?: number;
 }
 
 export class UpdateSavedSearchDto {
   @IsOptional()
+  @IsEnum(JobSource)
+  source?: JobSource;
+
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   keyword?: string;
 
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   location?: string | null;
 
   @IsOptional()
@@ -62,7 +103,9 @@ export class UpdateSavedSearchDto {
   filters?: Record<string, unknown>;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
   @IsBoolean()
   enabled?: boolean;
 
@@ -72,45 +115,91 @@ export class UpdateSavedSearchDto {
   @Min(15)
   @Max(1440)
   scheduleMinutes?: number;
-}
-
-export class JobListQueryDto {
-  @IsOptional()
-  @IsEnum(JobSource)
-  source?: JobSource;
-
-  @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
-
-  @IsOptional()
-  @IsString()
-  q?: string;
-
-  @IsOptional()
-  @IsString()
-  location?: string;
-
-  @IsOptional()
-  @IsEnum(WorkplaceType)
-  workplaceType?: WorkplaceType;
-
-  @IsOptional()
-  @IsEnum(EmploymentType)
-  employmentType?: EmploymentType;
-
-  @IsOptional()
-  @IsISO8601()
-  publishedAfter?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
+  resultLimit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(15)
+  runWindowMinutes?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  requestDelaySeconds?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  requestJitterSeconds?: number;
+}
+
+export class JobListQueryDto {
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsEnum(JobSource)
+  source?: JobSource;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsEnum(JobStatus)
+  status?: JobStatus;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsEnum(WorkplaceType)
+  workplaceType?: WorkplaceType;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsEnum(EmploymentType)
+  employmentType?: EmploymentType;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsISO8601()
+  publishedAfter?: string;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === '' || value === undefined ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit = 25;
 
   @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
   cursor?: string;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === '' || value === undefined ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  page?: number;
 }

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: job_scraper
+          POSTGRES_USER: job_scraper
+          POSTGRES_PASSWORD: job_scraper
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U job_scraper -d job_scraper"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://job_scraper:job_scraper@localhost:5432/job_scraper
+      DB_SYNCHRONIZE: "false"
+      COLLECTION_ENABLED: "false"
+      APIFY_LINKEDIN_ENABLED: "false"
+      APIFY_XING_ENABLED: "false"
+      APIFY_TOKEN: ""
+      RUN_POSTGRES_INTEGRATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run migration:run
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run migration:check
+      - run: npm run migration:validate

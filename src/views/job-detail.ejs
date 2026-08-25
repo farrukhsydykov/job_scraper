@@ -8,13 +8,13 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/">Job collector</a>
+      <a class="brand" href="/"><span class="brand-mark">◒</span> Job collector</a>
       <nav><a href="/dashboard/searches">Searches &amp; runs</a></nav>
     </header>
     <main class="detail-page">
       <a class="back-link" href="/">← All jobs</a>
       <section class="detail-header">
-        <p class="source"><%= job.source %></p>
+        <p class="source source-<%= job.source %>"><%= job.source %></p>
         <h1><%= job.title %></h1>
         <p class="lead"><%= job.companyName ?? 'Unknown company' %><%= job.location ? ` · ${job.location}` : '' %></p>
         <div class="tag-row">
@@ -28,7 +28,7 @@
         <article>
           <h2>Description</h2>
           <% if (job.description) { %>
-            <p class="description"><%= job.description %></p>
+            <div class="description"><%= job.description %></div>
           <% } else { %>
             <p class="muted">No description was provided by the source.</p>
           <% } %>

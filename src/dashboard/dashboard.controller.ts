@@ -12,7 +12,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { getCollectionEnv } from '../config/collection-env';
-import { CreateSavedSearchDto, JobListQueryDto } from '../contracts';
+import {
+  CreateSavedSearchDto,
+  JobListQueryDto,
+  UpdateSavedSearchDto,
+} from '../contracts';
 import {
   CollectionRunStatus,
   EmploymentType,
@@ -42,15 +46,43 @@ export class DashboardController {
   @Get()
   @Render('jobs')
   async jobs(@Query() query: JobListQueryDto): Promise<object> {
-    const page = await this.jobsService.list(query);
+    const pageQuery: JobListQueryDto = {
+      ...query,
+      page: query.page ?? 1,
+      cursor: undefined,
+    };
+    const page = await this.jobsService.list(pageQuery);
+    const currentPage = page.currentPage ?? 1;
+    const pageLinks = getPageNumbers(currentPage, page.totalPages).map(
+      (pageNumber) => ({
+        number: pageNumber,
+        url: `/?${this.toQueryString({
+          ...pageQuery,
+          page: pageNumber,
+        })}`,
+      }),
+    );
 
     return {
       title: 'Collected jobs',
       page,
-      query,
-      nextPageUrl: page.nextCursor
-        ? `/?${this.toQueryString({ ...query, cursor: page.nextCursor })}`
-        : null,
+      query: pageQuery,
+      currentPage,
+      pageLinks,
+      previousPageUrl:
+        currentPage > 1
+          ? `/?${this.toQueryString({
+              ...pageQuery,
+              page: currentPage - 1,
+            })}`
+          : null,
+      nextPageUrl:
+        currentPage < page.totalPages
+          ? `/?${this.toQueryString({
+              ...pageQuery,
+              page: currentPage + 1,
+            })}`
+          : null,
       sources: Object.values(JobSource),
       statuses: Object.values(JobStatus),
       workplaceTypes: Object.values(WorkplaceType),
@@ -83,7 +115,8 @@ export class DashboardController {
   async searches(): Promise<object> {
     return {
       title: 'Searches and runs',
-      searches: await this.searchesService.list(),
+      searches: await this.searchesService.listActive(),
+      archivedSearches: await this.searchesService.listArchived(),
       runs: await this.runsService.list(),
       sources: Object.values(JobSource),
       statuses: Object.values(CollectionRunStatus),
@@ -101,6 +134,55 @@ export class DashboardController {
     @Res() response: Response,
   ): Promise<void> {
     await this.searchesService.create(dto);
+    response.redirect('/dashboard/searches');
+  }
+
+  /**
+   * Updates a saved search from its server-rendered control card.
+   */
+  @Post('dashboard/searches/:id')
+  async updateSearch(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSavedSearchDto,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.searchesService.update(id, dto);
+    response.redirect('/dashboard/searches');
+  }
+
+  /**
+   * Archives a saved search from the dashboard and pauses future runs.
+   */
+  @Post('dashboard/searches/:id/archive')
+  async archiveSearch(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.searchesService.archive(id);
+    response.redirect('/dashboard/searches');
+  }
+
+  /**
+   * Restores an archived search to the dashboard without enabling it.
+   */
+  @Post('dashboard/searches/:id/restore')
+  async restoreSearch(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.searchesService.restore(id);
+    response.redirect('/dashboard/searches');
+  }
+
+  /**
+   * Permanently deletes an archived search from the dashboard.
+   */
+  @Post('dashboard/searches/:id/delete')
+  async deleteArchivedSearch(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.searchesService.deleteArchived(id);
     response.redirect('/dashboard/searches');
   }
 
@@ -150,3 +232,20 @@ export class DashboardController {
  */
 const formatDate = (value: Date | null): string =>
   value ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(value) : '—';
+
+/**
+ * Returns a compact page-number window around the current page.
+ */
+const getPageNumbers = (currentPage: number, totalPages: number): number[] => {
+  if (!totalPages) {
+    return [];
+  }
+
+  const firstPage = Math.max(1, currentPage - 2);
+  const lastPage = Math.min(totalPages, currentPage + 2);
+
+  return Array.from(
+    { length: lastPage - firstPage + 1 },
+    (_, index) => firstPage + index,
+  );
+};

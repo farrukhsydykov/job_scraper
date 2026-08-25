@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -27,6 +28,14 @@ export class SearchesController {
   }
 
   /**
+   * Lists archived searches separately from the active search desk.
+   */
+  @Get('archived')
+  async listArchived(): Promise<SavedSearch[]> {
+    return this.searchesService.listArchived();
+  }
+
+  /**
    * Creates a saved search for a supported source.
    */
   @Post()
@@ -43,5 +52,35 @@ export class SearchesController {
     @Body() dto: UpdateSavedSearchDto,
   ): Promise<SavedSearch> {
     return this.searchesService.update(id, dto);
+  }
+
+  /**
+   * Archives one saved search and pauses future scheduled runs.
+   */
+  @Post(':id/archive')
+  async archive(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<SavedSearch> {
+    return this.searchesService.archive(id);
+  }
+
+  /**
+   * Restores one archived search without re-enabling it automatically.
+   */
+  @Post(':id/restore')
+  async restore(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<SavedSearch> {
+    return this.searchesService.restore(id);
+  }
+
+  /**
+   * Permanently deletes a search after the archive safeguard has been passed.
+   */
+  @Delete(':id')
+  async deleteArchived(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<void> {
+    await this.searchesService.deleteArchived(id);
   }
 }

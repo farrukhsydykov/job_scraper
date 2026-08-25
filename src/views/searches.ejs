@@ -6,137 +6,302 @@
     <title><%= title %></title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body class="controls-page">
     <header class="site-header">
-      <a class="brand" href="/">Job collector</a>
-      <nav><a href="/">Collected jobs</a></nav>
+      <a class="brand" href="/"><span class="brand-mark">◒</span> Job collector</a>
+      <nav>
+        <a href="/">Collected jobs</a>
+        <a class="nav-active" href="/dashboard/searches">Searches &amp; runs</a>
+      </nav>
     </header>
     <main>
-      <section class="page-heading">
+      <section class="page-heading page-heading-controls">
         <div>
-          <p class="eyebrow">Collection controls</p>
-          <h1>Searches and runs</h1>
+          <p class="eyebrow">Collection studio</p>
+          <h1>Searches that stay on watch.</h1>
+          <p class="page-intro">Set a focused brief, a small collection budget, and a rhythm that respects the source.</p>
+        </div>
+        <div class="heading-note">
+          <span class="heading-note-number"><%= searches.length + archivedSearches.length %></span>
+          <span>saved<br />briefs</span>
         </div>
       </section>
 
       <% if (!collection.globallyEnabled) { %>
         <p class="notice notice-warning">
-          Collection is off. Copy <code>.env.example</code> to <code>.env</code>,
-          set <code>COLLECTION_ENABLED=true</code> and a source flag, keep
-          <code>COLLECTION_MODE=fixture</code> for a local test, then restart.
-        </p>
-      <% } else if (collection.mode === 'fixture') { %>
-        <p class="notice">
-          Fixture mode is on. Runs read local HTML from <code>fixtures/</code>
-          and do not call LinkedIn or XING.
-          LinkedIn <%= collection.linkedInEnabled ? 'enabled' : 'disabled' %>;
-          XING <%= collection.xingEnabled ? 'enabled' : 'disabled' %>.
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <span><strong>Collection is paused.</strong> Set <code>COLLECTION_ENABLED=true</code>, a source flag, and an authorized Apify token in <code>.env</code>; the app will keep collecting off until restarted.</span>
         </p>
       <% } else { %>
-        <p class="notice notice-warning">
-          Live collection mode.
-          LinkedIn <%= collection.linkedInEnabled ? 'enabled' : 'disabled' %>;
-          XING <%= collection.xingEnabled ? 'enabled' : 'disabled' %>.
-          Use this only for an authorized source path.
+        <p class="notice notice-ready">
+          <span class="notice-icon" aria-hidden="true">✓</span>
+          <span><strong>Apify collection is ready.</strong> LinkedIn <%= collection.linkedInEnabled ? 'enabled' : 'disabled' %>; XING <%= collection.xingEnabled ? 'enabled' : 'disabled' %>.</span>
         </p>
       <% } %>
 
-      <section class="panel">
-        <h2>Add saved search</h2>
-        <form class="search-form" method="post" action="/dashboard/searches">
-          <label>
-            Source
-            <select name="source" required>
-              <% sources.forEach((source) => { %>
-                <option value="<%= source %>"><%= source %></option>
-              <% }) %>
-            </select>
-          </label>
-          <label>
-            Keyword
-            <input name="keyword" required placeholder="e.g. backend engineer" />
-          </label>
-          <label>
-            Location
-            <input name="location" placeholder="e.g. Berlin" />
-          </label>
-          <label>
-            Run every (minutes)
-            <input name="scheduleMinutes" type="number" min="15" max="1440" value="360" required />
-          </label>
-          <button type="submit">Save search</button>
+      <section class="panel create-panel">
+        <div class="panel-kicker">01 / New brief</div>
+        <div class="section-heading">
+          <div>
+            <h2>Add a saved search</h2>
+            <p class="muted">Every run is capped, time-boxed, and recorded for review.</p>
+          </div>
+        </div>
+        <form class="search-form search-form-create" method="post" action="/dashboard/searches">
+          <div class="search-form-primary">
+            <label class="field-source">
+              Source
+              <select name="source" required>
+                <% sources.forEach((source) => { %>
+                  <option value="<%= source %>"><%= source %></option>
+                <% }) %>
+              </select>
+            </label>
+            <label class="field-keyword">
+              Keyword
+              <input name="keyword" required placeholder="e.g. backend engineer" />
+            </label>
+            <label class="field-location">
+              Location
+              <input name="location" placeholder="e.g. Berlin" />
+            </label>
+          </div>
+          <div class="search-form-settings">
+            <span class="form-group-label">Collection settings</span>
+            <div class="search-form-settings-grid">
+              <label>
+                Run every
+                <span class="input-with-suffix"><input name="scheduleMinutes" type="number" min="15" max="1440" value="360" required /><span>min</span></span>
+              </label>
+              <label>
+                Results per run
+                <span class="input-with-suffix"><input name="resultLimit" type="number" min="1" max="100" value="10" required /><span>jobs</span></span>
+              </label>
+              <label>
+                Max run window
+                <span class="input-with-suffix"><input name="runWindowMinutes" type="number" min="1" max="15" value="5" required /><span>min</span></span>
+              </label>
+              <label>
+                Delay between pages
+                <span class="input-with-suffix"><input name="requestDelaySeconds" type="number" min="0" max="300" value="0" required /><span>sec</span></span>
+              </label>
+              <label>
+                Jitter (±)
+                <span class="input-with-suffix"><input name="requestJitterSeconds" type="number" min="0" max="300" value="0" required /><span>sec</span></span>
+              </label>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit"><span aria-hidden="true">＋</span> Save search</button>
+            <p class="field-help">Pacing applies to requests this app makes while reading the bounded Apify result pages.</p>
+          </div>
         </form>
       </section>
 
-      <section class="panel">
+      <section class="panel saved-searches-panel">
+        <div class="panel-kicker">02 / Saved briefs</div>
         <div class="section-heading">
-          <h2>Saved searches</h2>
-          <span class="count"><%= searches.length %></span>
+          <div>
+            <h2>Your search desk</h2>
+            <p class="muted">Edit a brief in place. Paused searches never run on the scheduler.</p>
+          </div>
+          <span class="count"><%= searches.length %> active</span>
         </div>
         <% if (!searches.length) { %>
-          <p class="muted">No saved searches yet.</p>
+          <div class="empty-state empty-searches">
+            <span class="empty-orbit" aria-hidden="true">✳</span>
+            <h3>No active saved searches</h3>
+            <p class="muted">Add a brief above to start your collection desk.</p>
+          </div>
         <% } else { %>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Query</th>
-                  <th>Schedule</th>
-                  <th>Last attempt</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% searches.forEach((search) => { %>
-                  <tr>
-                    <td><span class="source"><%= search.source %></span></td>
-                    <td><strong><%= search.keyword %></strong><%= search.location ? ` · ${search.location}` : '' %></td>
-                    <td><%= search.scheduleMinutes %> min</td>
-                    <td><%= formatDate(search.lastAttemptedAt) %></td>
-                    <td class="actions">
-                      <form method="post" action="/dashboard/searches/<%= search.id %>/runs">
-                        <button type="submit" <%= search.enabled ? '' : 'disabled' %>>Run now</button>
-                      </form>
-                      <form method="post" action="/dashboard/searches/<%= search.id %>/toggle">
-                        <button class="button-secondary" type="submit"><%= search.enabled ? 'Disable' : 'Enable' %></button>
-                      </form>
-                    </td>
-                  </tr>
-                <% }) %>
-              </tbody>
-            </table>
+          <div class="search-card-list">
+            <% searches.forEach((search) => { %>
+              <article class="search-card source-<%= search.source %> <%= search.enabled ? 'is-enabled' : 'is-paused' %>">
+                <div class="search-card-accent" aria-hidden="true"></div>
+                <header class="search-card-header">
+                  <div class="search-card-identity">
+                    <span class="source source-badge"><%= search.source %></span>
+                    <span class="search-state"><%= search.enabled ? 'Watching' : 'Paused' %></span>
+                  </div>
+                  <div class="actions search-card-actions">
+                    <form method="post" action="/dashboard/searches/<%= search.id %>/runs">
+                      <button class="button-run" type="submit" <%= search.enabled ? '' : 'disabled' %> title="<%= search.enabled ? 'Run this search now' : 'Enable this search before running it' %>">
+                        <span aria-hidden="true">▶</span> Run now
+                      </button>
+                    </form>
+                    <form method="post" action="/dashboard/searches/<%= search.id %>/toggle">
+                      <% if (search.enabled) { %>
+                        <button class="icon-button toggle-button toggle-pause" type="submit" aria-label="Pause saved search <%= search.keyword %>" title="Pause scheduled search">
+                          <span aria-hidden="true">Ⅱ</span>
+                        </button>
+                      <% } else { %>
+                        <button class="icon-button toggle-button toggle-play" type="submit" aria-label="Enable saved search <%= search.keyword %>" title="Enable scheduled search">
+                          <span aria-hidden="true">▶</span>
+                        </button>
+                      <% } %>
+                    </form>
+                    <form method="post" action="/dashboard/searches/<%= search.id %>/archive">
+                      <button class="icon-button archive-button" type="submit" aria-label="Archive saved search <%= search.keyword %>" title="Archive search">
+                        <span aria-hidden="true">▣</span>
+                      </button>
+                    </form>
+                  </div>
+                </header>
+                <div class="search-card-title">
+                  <h3><%= search.keyword %></h3>
+                  <p><%= search.location ?? 'Any location' %></p>
+                </div>
+                <form class="search-edit-form" method="post" action="/dashboard/searches/<%= search.id %>">
+                  <div class="search-edit-primary">
+                    <label class="field-source">
+                      Source
+                      <select name="source" required>
+                        <% sources.forEach((source) => { %>
+                          <option value="<%= source %>" <%= search.source === source ? 'selected' : '' %>><%= source %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                    <label class="field-keyword">
+                      Keyword
+                      <input name="keyword" value="<%= search.keyword %>" required />
+                    </label>
+                    <label class="field-location">
+                      Location
+                      <input name="location" value="<%= search.location ?? '' %>" placeholder="Any location" />
+                    </label>
+                  </div>
+                  <div class="search-edit-settings">
+                    <span class="form-group-label">Collection settings</span>
+                    <div class="search-edit-settings-grid">
+                      <label>
+                        Run every
+                        <span class="input-with-suffix"><input name="scheduleMinutes" type="number" min="15" max="1440" value="<%= search.scheduleMinutes %>" required /><span>min</span></span>
+                      </label>
+                      <label>
+                        Results per run
+                        <span class="input-with-suffix"><input name="resultLimit" type="number" min="1" max="100" value="<%= search.resultLimit ?? 10 %>" required /><span>jobs</span></span>
+                      </label>
+                      <label>
+                        Max run window
+                        <span class="input-with-suffix"><input name="runWindowMinutes" type="number" min="1" max="15" value="<%= search.runWindowMinutes ?? 5 %>" required /><span>min</span></span>
+                      </label>
+                      <label>
+                        Delay between pages
+                        <span class="input-with-suffix"><input name="requestDelaySeconds" type="number" min="0" max="300" value="<%= search.requestDelaySeconds ?? 0 %>" required /><span>sec</span></span>
+                      </label>
+                      <label>
+                        Jitter (±)
+                        <span class="input-with-suffix"><input name="requestJitterSeconds" type="number" min="0" max="300" value="<%= search.requestJitterSeconds ?? 0 %>" required /><span>sec</span></span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="search-card-footer">
+                    <p class="muted">Last attempt <%= formatDate(search.lastAttemptedAt) %> · <%= search.resultLimit ?? 10 %> jobs / <%= search.runWindowMinutes ?? 5 %> min window</p>
+                    <button class="button-secondary button-save" type="submit">Save changes</button>
+                  </div>
+                </form>
+              </article>
+            <% }) %>
           </div>
         <% } %>
       </section>
 
-      <section class="panel">
+      <section class="panel archive-panel">
+        <div class="panel-kicker">03 / Archive</div>
+        <details class="archive-disclosure">
+          <summary>
+            <span>Archived searches</span>
+            <span class="count"><%= archivedSearches.length %></span>
+          </summary>
+          <% if (!archivedSearches.length) { %>
+            <p class="muted archive-empty">Archived searches will appear here when you clear a brief from the desk.</p>
+          <% } else { %>
+            <div class="search-card-list archive-list">
+              <% archivedSearches.forEach((search) => { %>
+                <article class="search-card archive-card source-<%= search.source %> is-paused">
+                  <div class="search-card-accent" aria-hidden="true"></div>
+                  <header class="search-card-header">
+                    <div class="search-card-identity">
+                      <span class="source source-badge"><%= search.source %></span>
+                      <span class="search-state">Archived</span>
+                    </div>
+                    <div class="actions">
+                      <form method="post" action="/dashboard/searches/<%= search.id %>/restore">
+                        <button class="button-secondary button-save" type="submit">Restore</button>
+                      </form>
+                      <form method="post" action="/dashboard/searches/<%= search.id %>/delete" onsubmit="return confirm('Delete this archived search permanently?');">
+                        <button class="button-danger button-save" type="submit">Delete permanently</button>
+                      </form>
+                    </div>
+                  </header>
+                  <div class="search-card-title">
+                    <h3><%= search.keyword %></h3>
+                    <p><%= search.location ?? 'Any location' %></p>
+                  </div>
+                  <footer class="search-card-footer">
+                    <p class="muted">Archived <%= formatDate(search.archivedAt) %> · <%= search.resultLimit ?? 10 %> jobs / <%= search.runWindowMinutes ?? 5 %> min window</p>
+                  </footer>
+                </article>
+              <% }) %>
+            </div>
+          <% } %>
+        </details>
+      </section>
+
+      <section class="panel runs-panel">
+        <div class="panel-kicker">04 / Run history</div>
         <div class="section-heading">
-          <h2>Recent runs</h2>
-          <span class="count"><%= runs.length %></span>
+          <div>
+            <h2>Recent runs</h2>
+            <p class="muted">Open a run to see exactly which jobs it found.</p>
+          </div>
+          <span class="count"><%= runs.length %> recorded</span>
         </div>
         <% if (!runs.length) { %>
-          <p class="muted">Runs will appear here after a saved search is started.</p>
+          <div class="empty-state">
+            <h3>Run history is quiet</h3>
+            <p class="muted">Runs will appear here after a saved search is started.</p>
+          </div>
         <% } else { %>
           <div class="table-wrap">
-            <table>
+            <table class="runs-table">
               <thead>
                 <tr>
                   <th>Started</th>
-                  <th>Source</th>
+                  <th>Brief</th>
                   <th>Status</th>
-                  <th>Jobs</th>
-                  <th>Message</th>
+                  <th>Progress</th>
+                  <th>Found jobs</th>
+                  <th>Run details</th>
                 </tr>
               </thead>
               <tbody>
                 <% runs.forEach((run) => { %>
                   <tr>
-                    <td><%= formatDate(run.startedAt) %></td>
-                    <td><%= run.source %></td>
+                    <td class="run-started"><%= formatDate(run.startedAt) %></td>
+                    <td>
+                      <span class="source source-<%= run.source %>"><%= run.source %></span>
+                      <strong><%= run.savedSearch?.keyword ?? `Search ${run.savedSearchId}` %></strong>
+                    </td>
                     <td><span class="status status-<%= run.status %>"><%= run.status %></span></td>
-                    <td><%= run.upsertedCount %> / <%= run.foundCount %></td>
-                    <td class="run-message"><%= run.errorMessage ?? 'Complete coverage confirmed' %></td>
+                    <td><%= run.progressCount ?? run.foundCount %> / <%= run.requestedCount ?? '—' %></td>
+                    <td><strong><%= run.upsertedCount %></strong> / <%= run.foundCount %></td>
+                    <td>
+                      <details class="run-results">
+                        <summary><%= run.runJobs?.length ?? 0 %> clickable <%= (run.runJobs?.length ?? 0) === 1 ? 'result' : 'results' %></summary>
+                        <% if (run.runJobs?.length) { %>
+                          <ul>
+                            <% run.runJobs.slice(0, 8).forEach((runJob) => { %>
+                              <li><a href="/dashboard/jobs/<%= runJob.job.id %>"><%= runJob.job.title %></a><span><%= runJob.job.companyName ?? 'Unknown company' %></span></li>
+                            <% }) %>
+                          </ul>
+                          <% if (run.runJobs.length > 8) { %><p class="muted">+ <%= run.runJobs.length - 8 %> more results in this run</p><% } %>
+                        <% } else { %>
+                          <p class="muted">No jobs were associated with this run.</p>
+                        <% } %>
+                      </details>
+                      <% if (run.errorMessage) { %><p class="run-error"><%= run.errorMessage %></p><% } %>
+                    </td>
                   </tr>
                 <% }) %>
               </tbody>

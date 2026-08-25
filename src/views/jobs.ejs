@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/">Job collector</a>
+      <a class="brand" href="/"><span class="brand-mark">◒</span> Job collector</a>
       <nav><a href="/dashboard/searches">Searches &amp; runs</a></nav>
     </header>
     <main>
@@ -17,7 +17,12 @@
           <p class="eyebrow">MVP dashboard</p>
           <h1>Collected jobs</h1>
         </div>
-        <span class="count"><%= page.jobs.length %> shown</span>
+        <div class="page-summary">
+          <span class="count"><%= page.totalCount %> jobs found</span>
+          <% if (page.totalPages) { %>
+            <span class="page-indicator">Page <%= currentPage %> / <%= page.totalPages %></span>
+          <% } %>
+        </div>
       </section>
 
       <form class="filters" method="get" action="/">
@@ -89,19 +94,39 @@
           <% page.jobs.forEach((job) => { %>
             <article class="job-card">
               <div class="job-card-main">
-                <p class="source"><%= job.source %></p>
-                <h2><a href="/dashboard/jobs/<%= job.id %>"><%= job.title %></a></h2>
+                <div class="job-card-title-row">
+                  <h2><a href="/dashboard/jobs/<%= job.id %>"><%= job.title %></a></h2>
+                  <div class="job-card-pills" aria-label="Job source and status">
+                    <span class="job-pill source source-badge source-<%= job.source %>"><%= job.source %></span>
+                    <span class="job-pill status status-<%= job.status %>"><%= job.status %></span>
+                  </div>
+                </div>
                 <p><%= job.companyName ?? 'Unknown company' %><%= job.location ? ` · ${job.location}` : '' %></p>
                 <p class="muted"><%= job.workplaceType %> · <%= job.employmentType %> · Seen <%= formatDate(job.lastSeenAt) %></p>
               </div>
-              <span class="status status-<%= job.status %>"><%= job.status %></span>
             </article>
           <% }) %>
         </section>
       <% } %>
 
-      <% if (nextPageUrl) { %>
-        <div class="pagination"><a class="button-secondary" href="<%= nextPageUrl %>">Next page</a></div>
+      <% if (page.totalPages > 1) { %>
+        <nav class="pagination" aria-label="Job list pages">
+          <% if (previousPageUrl) { %>
+            <a class="button-secondary" href="<%= previousPageUrl %>">← Previous page</a>
+          <% } %>
+          <div class="page-numbers" aria-label="Choose a page">
+            <% pageLinks.forEach((pageLink) => { %>
+              <% if (pageLink.number === currentPage) { %>
+                <span class="page-number is-current" aria-current="page"><%= pageLink.number %></span>
+              <% } else { %>
+                <a class="page-number" href="<%= pageLink.url %>"><%= pageLink.number %></a>
+              <% } %>
+            <% }) %>
+          </div>
+          <% if (nextPageUrl) { %>
+            <a class="button-secondary" href="<%= nextPageUrl %>">Next page →</a>
+          <% } %>
+        </nav>
       <% } %>
     </main>
   </body>

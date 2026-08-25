@@ -52,20 +52,35 @@ export class SavedSearch {
   @Column({ type: 'enum', enum: JobSource })
   source!: JobSource;
 
-  @Column()
+  @Column({ type: 'varchar' })
   keyword!: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   location!: string | null;
 
   @Column({ name: 'filters_json', type: 'jsonb', default: () => "'{}'" })
   filters!: Record<string, unknown>;
 
-  @Column({ default: true })
+  @Column({ default: true, type: 'boolean' })
   enabled!: boolean;
+
+  @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
+  archivedAt!: Date | null;
 
   @Column({ name: 'schedule_minutes', type: 'integer', default: 360 })
   scheduleMinutes!: number;
+
+  @Column({ name: 'result_limit', type: 'integer', default: 10 })
+  resultLimit!: number;
+
+  @Column({ name: 'run_window_minutes', type: 'integer', default: 5 })
+  runWindowMinutes!: number;
+
+  @Column({ name: 'request_delay_seconds', type: 'integer', default: 0 })
+  requestDelaySeconds!: number;
+
+  @Column({ name: 'request_jitter_seconds', type: 'integer', default: 0 })
+  requestJitterSeconds!: number;
 
   @Column({ name: 'last_completed_at', type: 'timestamptz', nullable: true })
   lastCompletedAt!: Date | null;
@@ -92,7 +107,7 @@ export class CollectionRun {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ name: 'saved_search_id' })
+  @Column({ name: 'saved_search_id', type: 'integer' })
   savedSearchId!: number;
 
   @Column({ type: 'enum', enum: JobSource })
@@ -101,7 +116,7 @@ export class CollectionRun {
   @Column({ type: 'enum', enum: CollectionRunStatus })
   status!: CollectionRunStatus;
 
-  @Column({ name: 'coverage_complete', default: false })
+  @Column({ name: 'coverage_complete', type: 'boolean', default: false })
   coverageComplete!: boolean;
 
   @Column({ name: 'found_count', type: 'integer', default: 0 })
@@ -110,8 +125,26 @@ export class CollectionRun {
   @Column({ name: 'upserted_count', type: 'integer', default: 0 })
   upsertedCount!: number;
 
+  @Column({ name: 'requested_count', type: 'integer', default: 10 })
+  requestedCount!: number;
+
+  @Column({ name: 'run_window_minutes', type: 'integer', default: 5 })
+  runWindowMinutes!: number;
+
+  @Column({ name: 'progress_count', type: 'integer', default: 0 })
+  progressCount!: number;
+
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage!: string | null;
+
+  @Column({ name: 'collection_provider', type: 'varchar', nullable: true })
+  collectionProvider!: string | null;
+
+  @Column({ name: 'external_actor_id', type: 'varchar', nullable: true })
+  externalActorId!: string | null;
+
+  @Column({ name: 'external_run_id', type: 'varchar', nullable: true })
+  externalRunId!: string | null;
 
   @CreateDateColumn({ name: 'started_at', type: 'timestamptz' })
   startedAt!: Date;
@@ -124,6 +157,9 @@ export class CollectionRun {
   })
   @JoinColumn({ name: 'saved_search_id' })
   savedSearch!: SavedSearch;
+
+  @OneToMany(() => CollectionRunJob, (runJob) => runJob.run)
+  runJobs!: CollectionRunJob[];
 }
 
 @Entity({ name: 'jobs' })
@@ -136,7 +172,7 @@ export class Job {
   @Column({ type: 'enum', enum: JobSource })
   source!: JobSource;
 
-  @Column({ name: 'source_job_id' })
+  @Column({ name: 'source_job_id', type: 'varchar' })
   sourceJobId!: string;
 
   @Column({ name: 'source_url', type: 'text' })
@@ -145,16 +181,16 @@ export class Job {
   @Column({ name: 'apply_url', type: 'text', nullable: true })
   applyUrl!: string | null;
 
-  @Column()
+  @Column({ type: 'varchar' })
   title!: string;
 
-  @Column({ name: 'company_name', nullable: true })
+  @Column({ name: 'company_name', type: 'varchar', nullable: true })
   companyName!: string | null;
 
   @Column({ name: 'company_url', type: 'text', nullable: true })
   companyUrl!: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   location!: string | null;
 
   @Column({
@@ -185,7 +221,7 @@ export class Job {
   @Column({ type: 'enum', enum: JobStatus, default: JobStatus.ACTIVE })
   status!: JobStatus;
 
-  @Column({ name: 'data_hash' })
+  @Column({ name: 'data_hash', type: 'varchar' })
   dataHash!: string;
 
   @Column({ name: 'first_seen_at', type: 'timestamptz' })
@@ -202,6 +238,35 @@ export class Job {
 
   @OneToMany(() => JobSearch, (jobSearch) => jobSearch.job)
   jobSearches!: JobSearch[];
+
+  @OneToMany(() => CollectionRunJob, (runJob) => runJob.job)
+  runJobs!: CollectionRunJob[];
+}
+
+@Entity({ name: 'collection_run_jobs' })
+@Index(['runId', 'foundOrder'])
+export class CollectionRunJob {
+  @PrimaryColumn({ name: 'run_id', type: 'integer' })
+  runId!: number;
+
+  @PrimaryColumn({ name: 'job_id', type: 'integer' })
+  jobId!: number;
+
+  @Column({ name: 'found_order', type: 'integer' })
+  foundOrder!: number;
+
+  @CreateDateColumn({ name: 'found_at', type: 'timestamptz' })
+  foundAt!: Date;
+
+  @ManyToOne(() => CollectionRun, (run) => run.runJobs, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'run_id' })
+  run!: CollectionRun;
+
+  @ManyToOne(() => Job, (job) => job.runJobs, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'job_id' })
+  job!: Job;
 }
 
 /**
@@ -211,13 +276,13 @@ export class Job {
 @Entity({ name: 'job_searches' })
 @Index(['jobId', 'isAvailable'])
 export class JobSearch {
-  @PrimaryColumn({ name: 'saved_search_id' })
+  @PrimaryColumn({ name: 'saved_search_id', type: 'integer' })
   savedSearchId!: number;
 
-  @PrimaryColumn({ name: 'job_id' })
+  @PrimaryColumn({ name: 'job_id', type: 'integer' })
   jobId!: number;
 
-  @Column({ name: 'is_available', default: true })
+  @Column({ name: 'is_available', type: 'boolean', default: true })
   isAvailable!: boolean;
 
   @CreateDateColumn({ name: 'first_seen_at', type: 'timestamptz' })

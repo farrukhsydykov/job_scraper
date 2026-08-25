@@ -4,12 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { JobListQueryDto } from '../contracts';
 import {
   Job,
   JobSearch,
   JobStatus,
+  CollectionRunJob,
   SavedSearch,
 } from '../database/entities';
 import { CollectedJob } from '../collectors/collector.types';
@@ -18,6 +19,10 @@ import { createJobDataHash, isClosedJob } from './job-data';
 export type PaginatedJobs = {
   jobs: Job[];
   nextCursor: string | null;
+  previousCursor: string | null;
+  totalCount: number;
+  totalPages: number;
+  currentPage: number | null;
 };
 
 /**
@@ -43,14 +48,20 @@ export class JobsService {
     runStartedAt: Date,
     listings: CollectedJob[],
     coverageComplete: boolean,
+    runId?: number,
+    deadlineAt?: Date,
   ): Promise<number> {
     return this.dataSource.transaction(async (manager) => {
       const jobRepository = manager.getRepository(Job);
       const jobSearchRepository = manager.getRepository(JobSearch);
+      const runJobRepository = runId
+        ? manager.getRepository(CollectionRunJob)
+        : null;
       const observedAt = new Date();
       let upsertedCount = 0;
 
-      for (const listing of listings) {
+      for (const [foundOrder, listing] of listings.entries()) {
+        this.ensureWithinDeadline(deadlineAt);
         this.validateListing(search, listing);
         const job = await this.upsertJob(
           jobRepository,
@@ -64,18 +75,29 @@ export class JobsService {
           observedAt,
           job.status !== JobStatus.CLOSED,
         );
+        if (runJobRepository && runId !== undefined) {
+          await this.markRunObservation(
+            runJobRepository,
+            runId,
+            job.id,
+            foundOrder,
+          );
+        }
         upsertedCount += 1;
       }
 
       if (coverageComplete) {
+        this.ensureWithinDeadline(deadlineAt);
         await this.markMissingJobsUnavailable(
           jobRepository,
           jobSearchRepository,
           search.id,
           runStartedAt,
+          deadlineAt,
         );
       }
 
+      this.ensureWithinDeadline(deadlineAt);
       return upsertedCount;
     });
   }
@@ -85,11 +107,90 @@ export class JobsService {
    */
   async list(query: JobListQueryDto): Promise<PaginatedJobs> {
     const limit = query.limit ?? 25;
-    const builder = this.jobs
-      .createQueryBuilder('job')
+    const totalCount = await this.createJobsQuery(query).getCount();
+    const totalPages = Math.ceil(totalCount / limit);
+
+    if (query.page !== undefined) {
+      return this.listByPage(query, limit, totalCount, totalPages);
+    }
+
+    const builder = this.createJobsQuery(query)
       .orderBy('job.last_seen_at', 'DESC')
       .addOrderBy('job.id', 'DESC')
       .take(limit + 1);
+    this.applyCursor(builder, query.cursor);
+
+    const result = await builder.getMany();
+    const hasMore = result.length > limit;
+    const jobs = hasMore ? result.slice(0, limit) : result;
+    const finalJob = jobs.at(-1);
+    const firstJob = jobs.at(0);
+
+    return {
+      jobs,
+      nextCursor:
+        hasMore && finalJob
+          ? this.encodeCursor(finalJob.lastSeenAt, finalJob.id)
+          : null,
+      previousCursor:
+        query.cursor && firstJob
+          ? await this.findPreviousCursor(query, firstJob, limit)
+          : null,
+      totalCount,
+      totalPages,
+      currentPage: query.cursor ? null : 1,
+    };
+  }
+
+  /**
+   * Returns an offset-based page with total result metadata.
+   */
+  private async listByPage(
+    query: JobListQueryDto,
+    limit: number,
+    totalCount: number,
+    totalPages: number,
+  ): Promise<PaginatedJobs> {
+    const requestedPage = query.page ?? 1;
+    const currentPage = totalPages
+      ? Math.min(requestedPage, totalPages)
+      : 1;
+    const jobs = await this.createJobsQuery(query)
+      .orderBy('job.last_seen_at', 'DESC')
+      .addOrderBy('job.id', 'DESC')
+      .skip((currentPage - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return {
+      jobs,
+      nextCursor: null,
+      previousCursor: null,
+      totalCount,
+      totalPages,
+      currentPage,
+    };
+  }
+
+  /**
+   * Returns one current job record or a 404 response.
+   */
+  async findById(id: number): Promise<Job> {
+    const job = await this.jobs.findOneBy({ id });
+    if (!job) {
+      throw new NotFoundException(`Job ${id} was not found.`);
+    }
+
+    return job;
+  }
+
+  /**
+   * Builds the filtered jobs query before cursor and sort conditions are added.
+   */
+  private createJobsQuery(
+    query: JobListQueryDto,
+  ): SelectQueryBuilder<Job> {
+    const builder = this.jobs.createQueryBuilder('job');
 
     if (query.source) {
       builder.andWhere('job.source = :source', { source: query.source });
@@ -130,38 +231,53 @@ export class JobsService {
       );
     }
 
-    if (query.cursor) {
-      const cursor = this.decodeCursor(query.cursor);
-      builder.andWhere(
-        '(job.last_seen_at < :cursorDate OR (job.last_seen_at = :cursorDate AND job.id < :cursorId))',
-        { cursorDate: cursor.lastSeenAt, cursorId: cursor.id },
-      );
-    }
-
-    const result = await builder.getMany();
-    const hasMore = result.length > limit;
-    const jobs = hasMore ? result.slice(0, limit) : result;
-    const finalJob = jobs.at(-1);
-
-    return {
-      jobs,
-      nextCursor:
-        hasMore && finalJob
-          ? this.encodeCursor(finalJob.lastSeenAt, finalJob.id)
-          : null,
-    };
+    return builder;
   }
 
   /**
-   * Returns one current job record or a 404 response.
+   * Applies the descending stable cursor boundary to a jobs query.
    */
-  async findById(id: number): Promise<Job> {
-    const job = await this.jobs.findOneBy({ id });
-    if (!job) {
-      throw new NotFoundException(`Job ${id} was not found.`);
+  private applyCursor(
+    builder: SelectQueryBuilder<Job>,
+    encodedCursor?: string,
+  ): void {
+    if (!encodedCursor) {
+      return;
     }
 
-    return job;
+    const cursor = this.decodeCursor(encodedCursor);
+    builder.andWhere(
+      '(job.last_seen_at < :cursorDate OR (job.last_seen_at = :cursorDate AND job.id < :cursorId))',
+      { cursorDate: cursor.lastSeenAt, cursorId: cursor.id },
+    );
+  }
+
+  /**
+   * Finds the cursor needed to navigate one page backward.
+   */
+  private async findPreviousCursor(
+    query: JobListQueryDto,
+    firstJob: Job,
+    limit: number,
+  ): Promise<string | null> {
+    const previousJobs = await this.createJobsQuery(query)
+      .andWhere(
+        '(job.last_seen_at > :firstDate OR (job.last_seen_at = :firstDate AND job.id > :firstId))',
+        { firstDate: firstJob.lastSeenAt, firstId: firstJob.id },
+      )
+      .orderBy('job.last_seen_at', 'ASC')
+      .addOrderBy('job.id', 'ASC')
+      .take(limit + 1)
+      .getMany();
+
+    if (previousJobs.length <= limit) {
+      return null;
+    }
+
+    const previousBoundary = previousJobs.at(-1);
+    return previousBoundary
+      ? this.encodeCursor(previousBoundary.lastSeenAt, previousBoundary.id)
+      : null;
   }
 
   /**
@@ -181,9 +297,15 @@ export class JobsService {
     }
 
     try {
-      new URL(listing.sourceUrl);
+      const sourceUrl = new URL(listing.sourceUrl);
+      if (!['http:', 'https:'].includes(sourceUrl.protocol)) {
+        throw new Error('Invalid source URL protocol.');
+      }
       if (listing.applyUrl) {
-        new URL(listing.applyUrl);
+        const applyUrl = new URL(listing.applyUrl);
+        if (!['http:', 'https:'].includes(applyUrl.protocol)) {
+          throw new Error('Invalid application URL protocol.');
+        }
       }
     } catch {
       throw new BadRequestException('A source listing includes an invalid URL.');
@@ -265,6 +387,31 @@ export class JobsService {
   }
 
   /**
+   * Associates one persisted job with the run that discovered it.
+   */
+  private async markRunObservation(
+    repository: Repository<CollectionRunJob>,
+    runId: number,
+    jobId: number,
+    foundOrder: number,
+  ): Promise<void> {
+    const existing = await repository.findOneBy({ runId, jobId });
+    if (existing) {
+      existing.foundOrder = foundOrder;
+      await repository.save(existing);
+      return;
+    }
+
+    await repository.save(
+      repository.create({
+        runId,
+        jobId,
+        foundOrder,
+      }),
+    );
+  }
+
+  /**
    * Marks links missing from a complete search and closes globally unseen jobs.
    */
   private async markMissingJobsUnavailable(
@@ -272,6 +419,7 @@ export class JobsService {
     jobSearchRepository: Repository<JobSearch>,
     savedSearchId: number,
     runStartedAt: Date,
+    deadlineAt?: Date,
   ): Promise<void> {
     const staleLinks = await jobSearchRepository
       .createQueryBuilder('jobSearch')
@@ -285,11 +433,13 @@ export class JobsService {
     }
 
     for (const link of staleLinks) {
+      this.ensureWithinDeadline(deadlineAt);
       link.isAvailable = false;
     }
     await jobSearchRepository.save(staleLinks);
 
     for (const jobId of new Set(staleLinks.map((link) => link.jobId))) {
+      this.ensureWithinDeadline(deadlineAt);
       const activeSearchCount = await jobSearchRepository.countBy({
         jobId,
         isAvailable: true,
@@ -300,6 +450,15 @@ export class JobsService {
         job.status = JobStatus.UNAVAILABLE;
         await jobRepository.save(job);
       }
+    }
+  }
+
+  /**
+   * Stops persistence before it can continue outside a run's configured window.
+   */
+  private ensureWithinDeadline(deadlineAt?: Date): void {
+    if (deadlineAt && Date.now() >= deadlineAt.getTime()) {
+      throw new Error('Collection run exceeded its configured window.');
     }
   }
 

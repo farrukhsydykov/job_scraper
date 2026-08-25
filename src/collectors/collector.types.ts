@@ -26,6 +26,18 @@ export type CollectedJob = {
 export type CollectionResult = {
   jobs: CollectedJob[];
   coverageComplete: boolean;
+  provenance: CollectionProvenance;
+  skippedCount: number;
+};
+
+export type CollectionOptions = {
+  deadlineAt: Date;
+};
+
+export type CollectionProvenance = {
+  provider: 'apify';
+  actorId: string;
+  externalRunId: string;
 };
 
 export interface JobCollector {
@@ -34,7 +46,10 @@ export interface JobCollector {
   /**
    * Collects a bounded search result from one authorized source.
    */
-  collect(search: SavedSearch): Promise<CollectionResult>;
+  collect(
+    search: SavedSearch,
+    options?: CollectionOptions,
+  ): Promise<CollectionResult>;
 }
 
 export class CollectionBlockedError extends Error {
